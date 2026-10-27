@@ -1,4 +1,6 @@
+import datetime
 import warnings
+from urllib.parse import urlencode
 
 from stripe._stripe_object import StripeObject
 from stripe._encode import _api_encode
@@ -116,3 +118,39 @@ class TestApiEncode:
             ("items[1][0]", 3),
             ("items[1][1]", 4),
         ]
+
+    def test_encode_boolean_list_and_tuple_values(self):
+        """Booleans that are direct list or tuple elements encode as lowercase strings."""
+        for value in ([True, False], (True, False)):
+            result = list(_api_encode({"flags": value}))
+            assert result == [
+                ("flags[0]", "true"),
+                ("flags[1]", "false"),
+            ]
+
+    def test_encode_datetime_list_and_tuple_values(self):
+        """Datetimes that are direct list or tuple elements encode as unix timestamps."""
+        dt = datetime.datetime(
+            2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc
+        )
+        for value in ([dt], (dt,)):
+            result = list(_api_encode({"created": value}))
+            assert result == [("created[0]", 1704164645)]
+
+    def test_encode_nested_boolean_list_value(self):
+        """Booleans inside nested lists still encode as lowercase strings."""
+        result = list(_api_encode({"flags": [[True], [False]]}))
+        assert result == [
+            ("flags[0][0]", "true"),
+            ("flags[1][0]", "false"),
+        ]
+
+    def test_urlencode_boolean_and_datetime_list_items(self):
+        """List items match the form encoding used for top-level bools and datetimes."""
+        dt = datetime.datetime(
+            2024, 1, 2, 3, 4, 5, tzinfo=datetime.timezone.utc
+        )
+        flags = urlencode(list(_api_encode({"flags": [True, False]})))
+        created = urlencode(list(_api_encode({"created": [dt]})))
+        assert flags == "flags%5B0%5D=true&flags%5B1%5D=false"
+        assert created == "created%5B0%5D=1704164645"
